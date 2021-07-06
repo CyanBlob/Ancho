@@ -6,7 +6,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-paprika-api = {path = "../paprika-api"}
+paprika-api = "1.0.0"
 tokio = { version = "1", features = ["full"] }
 iced = "0.3.0"
 iced_native = "0.4.0"
