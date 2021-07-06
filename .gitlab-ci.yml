@@ -19,7 +19,7 @@ image: "rust:latest"
 # You will often need this when you (or any of your dependencies) depends on C code.
 before_script:
   - apt-get update -yqq
-  - apt-get install -yqq --no-install-recommends build-essential
+  - apt-get install -yqq --no-install-recommends build-essential libxkbcommon-dev libxkbcommon-x11-0 libxkbcommon-x11-dev libxkbcommon0
 
 # Use cargo to test the project
 test:cargo:
