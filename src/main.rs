@@ -3,8 +3,8 @@ use paprika_api::api;
 use std::env;
 
 mod app;
+//mod paprika;
 //mod sample;
-
 
 async fn login() -> Result<String, Box<dyn std::error::Error>> {
     if let Ok(email) = env::var("PAPRIKA_EMAIL") {
@@ -101,13 +101,13 @@ async fn create_recipe(token: &str) {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    if let Ok(_token) = login().await {
+    let res = app::HomePage::run(Settings::default());
+    match res {
+        Ok(_) => todo!(),
+        Err(_) => todo!(),
+    }
+    /*if let Ok(_token) = login().await {
         println!("Login successful!");
-        let res = app::HomePage::run(Settings::default());
-        match res {
-            Ok(_) => todo!(),
-            Err(_) => todo!(),
-        }
         /*let categories = api::get_categories(&_token).await;
         for (_, category) in categories.iter().enumerate() {
             println!("Category: {:?}", category);
@@ -117,5 +117,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         //create_recipe(&_token).await;
     } else {
         return Err("Login failed!".into());
-    }
+    }*/
+    Ok(())
 }
