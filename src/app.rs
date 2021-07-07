@@ -16,6 +16,7 @@ use iced_futures::futures;
 pub struct HomePage {
     panes: pane_grid::State<Pane>,
     paprika: Arc<Mutex<paprika::Paprika>>,
+    recipes: Arc<Mutex<Vec<paprika_api::api::Recipe>>>,
 }
 
 struct NavPane {
@@ -80,6 +81,7 @@ where
             self.paprika.clone(),
             move |paprika| async move {
                 let uid;
+                let mut fetched = false;
                 {
                     {
                         let mut _paprika = paprika.lock().unwrap();
@@ -101,7 +103,9 @@ where
                     {
                         let mut _paprika = paprika.lock().unwrap();
 
-                        if _paprika.recipe_entries.len() != 0 {
+                        if _paprika.recipe_entries.len() != 0
+                            && _paprika.recipes.len() != _paprika.recipe_entries.len()
+                        {
                             uid = _paprika.recipe_entries[_paprika.last_fetched]
                                 .uid
                                 .to_owned();
@@ -112,13 +116,19 @@ where
                                 .build()
                                 .unwrap()
                                 .block_on(_paprika.fetch_recipe_by_id(&uid));
+                            fetched = true;
                         }
                     }
                 }
-                // the render thread uses the same mutex, so this is to
-                // prevent that thread from being blocked too long
-                thread::sleep(time::Duration::from_millis(15));
-                Some((_id, paprika))
+                if fetched {
+                    // the render thread uses the same mutex, so this is to
+                    // prevent that thread from being blocked too long
+                    thread::sleep(time::Duration::from_millis(15));
+                    Some((_id, paprika))
+                } else {
+                    // TODO: figure out why returning None ends the subscription
+                    Some((_id, paprika))
+                }
             },
         ))
     }
@@ -145,6 +155,9 @@ impl Application for HomePage {
             HomePage {
                 panes: panes,
                 paprika: arc.clone(),
+                recipes: std::sync::Arc::new(std::sync::Mutex::new(
+                    Vec::<paprika_api::api::Recipe>::new(),
+                )),
             },
             Command::none(),
         )
@@ -167,19 +180,25 @@ impl Application for HomePage {
                     mutex.recipes.clear();
                     mutex.last_fetched = 0;
                 }
+                {
+                    let mut recipes = self.recipes.lock().unwrap();
+                    recipes.clear();
+                }
             }
             Message::NewRecipeClicked => {
                 println!("New recipe!")
             }
             Message::RecipeFetched(_id) => {
-                let recipes;
-                let recipe_entries;
+                let total;
                 {
                     let paprika = self.paprika.lock().unwrap();
-                    recipes = paprika.recipes.len();
-                    recipe_entries = paprika.recipe_entries.len();
+                    total = paprika.recipe_entries.len();
+                    self.recipes.lock().unwrap().clone_from(&paprika.recipes);
                 }
-                println!("Fetched! {}/{} total. ID: {}", recipes, recipe_entries, _id);
+                {
+                    let count = self.recipes.lock().unwrap().len();
+                    println!("Fetched recipe {}/{}", count, total);
+                }
             }
         }
         Command::none()
