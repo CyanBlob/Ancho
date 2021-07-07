@@ -54,6 +54,7 @@ impl Paprika {
         self.recipe_entries = paprika_api::api::get_recipes(&self.token).await.unwrap();
     }
     
+    #[allow(unused)]
     pub async fn get_recipe_by_id(&mut self, id: &str) -> paprika_api::api::Recipe {
         if self.token.is_empty() {
             self.login().await.expect("Couldn't log in");
@@ -103,7 +104,6 @@ impl Paprika {
             self.login().await.expect("Couldn't log in");
         }
 
-        let recipe_list = paprika_api::api::get_recipes(&self.token).await.unwrap();
         let mut recipe = paprika_api::api::get_recipe_by_id(&self.token, &id)
             .await
             .unwrap();
@@ -129,7 +129,6 @@ impl Paprika {
             self.login().await.expect("Couldn't log in");
         }
 
-        let recipe_list = paprika_api::api::get_recipes(&self.token).await.unwrap();
         let mut recipe = paprika_api::api::Recipe {
         uid: "".into(),
         name: "New recipe".into(),

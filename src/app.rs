@@ -2,21 +2,19 @@ mod paprika;
 
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
-use std::thread;
+use std::{thread, time};
 
 use iced::{
-    button, executor, keyboard,
+    button, executor,
     pane_grid::{self, Axis},
-    scrollable, Align, Application, Button, Clipboard, Color, Column, Command, Container, Element,
-    HorizontalAlignment, Length, PaneGrid, Row, Scrollable, Settings, Subscription, Text,
+    scrollable, Align, Application, Button, Clipboard, Column, Command, Container, Element,
+    HorizontalAlignment, Length, PaneGrid, Scrollable, Subscription, Text,
 };
 
 use iced_futures::futures;
-use iced_native::{event, subscription, Event};
 
 pub struct HomePage {
     panes: pane_grid::State<Pane>,
-    recipes: Vec<paprika_api::api::Recipe>,
     paprika: Arc<Mutex<paprika::Paprika>>,
 }
 
@@ -33,11 +31,10 @@ struct SimpleButton {
 
 struct Pane {
     pub content: Content,
-    pub is_nav_pane: bool, //pub controls: Controls,
+    pub is_nav_pane: bool,
 }
 
 struct Content {
-    id: usize,
     scroll: scrollable::State,
     split_horizontally: button::State,
     split_vertically: button::State,
@@ -45,21 +42,10 @@ struct Content {
     nav_pane: NavPane,
 }
 
-struct Controls {
-    close: button::State,
-}
-
 #[derive(Debug, Clone, Copy)]
 pub enum Message<T> {
     Split(pane_grid::Axis, pane_grid::Pane),
-    SplitFocused(pane_grid::Axis),
-    FocusAdjacent(pane_grid::Direction),
-    Clicked(pane_grid::Pane),
-    Dragged(pane_grid::DragEvent),
-    Resized(pane_grid::ResizeEvent),
-    TogglePin(pane_grid::Pane),
     Close(pane_grid::Pane),
-    CloseFocused,
     RefreshClicked,
     NewRecipeClicked,
     RecipeFetched(T),
@@ -67,7 +53,6 @@ pub enum Message<T> {
 
 struct RecipeFetcher<T> {
     id: T,
-    counter: u32,
     paprika: Arc<Mutex<paprika::Paprika>>,
 }
 
@@ -76,7 +61,6 @@ where
     T: 'static + Hash + Copy + Send,
     H: Hasher,
 {
-    //type Output = Message<T>;
     type Output = T;
 
     fn hash(&self, state: &mut H) {
@@ -88,87 +72,57 @@ where
 
     fn stream(
         self: Box<Self>,
-        input: futures::stream::BoxStream<I>,
+        _input: futures::stream::BoxStream<I>,
     ) -> futures::stream::BoxStream<Self::Output> {
         let _id = self.id;
-
-        //let paprika_locked = self.paprika.clone().lock().unwrap();
-        //let paprika = self.paprika;
-        //let cloned = self.paprika.clone();
-        //let uid = cloned.lock().unwrap().recipe_entries[self.counter]
-        //.uid
-        //.to_owned();
-        //let paprika = self.paprika.clone();
 
         Box::pin(futures::stream::unfold(
             self.paprika.clone(),
             move |paprika| async move {
-                //paprika.lock().unwrap().list_recipes().await;
-                let mut uid: String = "".into();
+                let uid;
                 {
-                    let mut _paprika = paprika.lock().unwrap();
+                    {
+                        let mut _paprika = paprika.lock().unwrap();
 
-                    if _paprika.recipe_entries.len() == 0 {
-                        tokio::runtime::Builder::new_current_thread()
-                            .enable_all()
-                            .build()
-                            .unwrap()
-                            .block_on(_paprika.fetch_recipe_list());
+                        if _paprika.recipe_entries.len() == 0 {
+                            tokio::runtime::Builder::new_current_thread()
+                                .enable_all()
+                                .build()
+                                .unwrap()
+                                .block_on(_paprika.fetch_recipe_list());
+                        }
                     }
 
-                    if _paprika.recipe_entries.len() != 0 {
-                        uid = _paprika.recipe_entries[_paprika.last_fetched]
-                            .uid
-                            .to_owned();
-                        _paprika.last_fetched += 1;
-                        //_paprika.get_recipe_by_id(&uid).await;
-                        let recipe = tokio::runtime::Builder::new_current_thread()
-                            .enable_all()
-                            .build()
-                            .unwrap()
-                            .block_on(_paprika.fetch_recipe_by_id(&uid));
+                    // the render thread uses the same mutex, so this is to
+                    // prevent that thread from being blocked too long
+                    // TODO: After fetching, copy to a vec on HomePage to prevent
+                    // need to block during the fetch
+                    thread::sleep(time::Duration::from_millis(15));
+                    {
+                        let mut _paprika = paprika.lock().unwrap();
+
+                        if _paprika.recipe_entries.len() != 0 {
+                            uid = _paprika.recipe_entries[_paprika.last_fetched]
+                                .uid
+                                .to_owned();
+                            _paprika.last_fetched += 1;
+
+                            tokio::runtime::Builder::new_current_thread()
+                                .enable_all()
+                                .build()
+                                .unwrap()
+                                .block_on(_paprika.fetch_recipe_by_id(&uid));
+                        }
                     }
                 }
-                //self.paprika.lock().unwrap().list_recipes().await;
-                //paprika_locked.get_recipe_by_id(&uid).await;
-                //self.counter += 1;
-                //println!("Sub?");
-                //Some((Message::RecipeFetched(_id), counter))
+                // the render thread uses the same mutex, so this is to
+                // prevent that thread from being blocked too long
+                thread::sleep(time::Duration::from_millis(15));
                 Some((_id, paprika))
             },
         ))
     }
 }
-
-/*impl RecipeFetcher<T> {
-    // must be called from a secondary thread
-    pub fn fetch(paprika: Arc<Mutex<paprika::Paprika>>) {
-        let recipe_entries = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap()
-            .block_on(paprika.lock().unwrap().fetch_recipe_list());
-
-        for entry in recipe_entries {
-            // only fetch if we don't already have it stored
-            if !paprika
-                .lock()
-                .unwrap()
-                .recipes
-                .iter()
-                .any(|recipe| return entry.uid == recipe.uid)
-            {
-                let recipe = tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                    .unwrap()
-                    .block_on(paprika.lock().unwrap().get_recipe_by_id(&entry.uid));
-                paprika.lock().unwrap().recipes.push(recipe);
-            }
-        }
-    }
-}*/
-
 impl Application for HomePage {
     type Message = Message<i32>;
     type Executor = executor::Default;
@@ -179,17 +133,10 @@ impl Application for HomePage {
         let mutex = std::sync::Mutex::new(paprika);
         let arc = std::sync::Arc::new(mutex);
 
-        {
-            let arc = arc.clone();
-            thread::spawn(move || {
-                //RecipeFetcher::fetch(arc);
-            });
-        }
-
         // create the State<Pane>, then split it
-        let (mut panes, pane) = pane_grid::State::new(Pane::new(100, true));
+        let (mut panes, pane) = pane_grid::State::new(Pane::new(true));
         let (_split_panes, _split) = panes
-            .split(Axis::Vertical, &pane, Pane::new(2, false))
+            .split(Axis::Vertical, &pane, Pane::new(false))
             .expect("Failed to split panes");
 
         panes.resize(&_split, 0.15);
@@ -197,7 +144,6 @@ impl Application for HomePage {
         (
             HomePage {
                 panes: panes,
-                recipes: Vec::<paprika_api::api::Recipe>::new(),
                 paprika: arc.clone(),
             },
             Command::none(),
@@ -211,40 +157,29 @@ impl Application for HomePage {
     ) -> Command<Message<i32>> {
         match message {
             Message::Split(axis, pane) => {
-                let _result = self.panes.split(axis, &pane, Pane::new(2, false));
-
-                //if let Some((pane, _)) = result {
-                //self.focus = Some(pane);
-                //}
-
-                //self.panes_created += 1;
+                let _result = self.panes.split(axis, &pane, Pane::new(false));
             }
-            Message::SplitFocused(_) => todo!(),
-            Message::FocusAdjacent(_) => todo!(),
-            Message::Clicked(_) => todo!(),
-            Message::Dragged(_) => todo!(),
-            Message::Resized(_) => todo!(),
-            Message::TogglePin(_) => todo!(),
             Message::Close(_) => todo!(),
-            Message::CloseFocused => todo!(),
             Message::RefreshClicked => {
-                self.paprika.lock().unwrap().recipes.clear();
+                let mut mutex = self.paprika.lock().unwrap();
                 {
-                    let paprika = self.paprika.clone();
-                    thread::spawn(move || {
-                        //RecipeFetcher::fetch(paprika);
-                    });
+                    mutex.recipe_entries.clear();
+                    mutex.recipes.clear();
+                    mutex.last_fetched = 0;
                 }
             }
             Message::NewRecipeClicked => {
                 println!("New recipe!")
             }
             Message::RecipeFetched(_id) => {
-                println!(
-                    "Fetched! {} total. ID: {}",
-                    self.paprika.lock().unwrap().recipes.len(),
-                    _id
-                );
+                let recipes;
+                let recipe_entries;
+                {
+                    let paprika = self.paprika.lock().unwrap();
+                    recipes = paprika.recipes.len();
+                    recipe_entries = paprika.recipe_entries.len();
+                }
+                println!("Fetched! {}/{} total. ID: {}", recipes, recipe_entries, _id);
             }
         }
         Command::none()
@@ -256,7 +191,6 @@ impl Application for HomePage {
                 is_nav_pane: pane.is_nav_pane,
             })
         });
-        println!("Recipes: {}", self.paprika.lock().unwrap().recipes.len());
         pane_grid.into()
     }
 
@@ -269,28 +203,9 @@ impl Application for HomePage {
         let test = iced::Subscription::from_recipe(RecipeFetcher {
             paprika: paprika,
             id: 0,
-            counter: 0,
         });
-        println!("Sub");
-        //Message::RecipeFetched(test)
         test.map(|id| Message::RecipeFetched(id))
-        //.map(Message::RecipeFetched)
     }
-    /*fn subscription(&self) -> Subscription<Message> {
-        subscription::events_with(|event, status| {
-            if let event::Status::Captured = status {
-                return None;
-            }
-
-            match event {
-                Event::Keyboard(keyboard::Event::KeyPressed {
-                    modifiers,
-                    key_code,
-                }) if modifiers.is_command_pressed() => Some(Message::RecipeFetched()),
-                _ => None,
-            }
-        })
-    }*/
 }
 
 impl SimpleButton {
@@ -331,18 +246,17 @@ impl NavPane {
 }
 
 impl Pane {
-    fn new(id: usize, is_nav_pane: bool) -> Self {
+    fn new(is_nav_pane: bool) -> Self {
         Self {
-            content: Content::new(id),
+            content: Content::new(),
             is_nav_pane: is_nav_pane,
         }
     }
 }
 
 impl Content {
-    fn new(id: usize) -> Self {
+    fn new() -> Self {
         Content {
-            id,
             scroll: scrollable::State::new(),
             split_horizontally: button::State::new(),
             split_vertically: button::State::new(),
@@ -416,8 +330,8 @@ impl Content {
 }
 
 mod style {
-    //use crate::PANE_ID_COLOR_FOCUSED;
-    use iced::{button, container, Background, Color, Vector};
+    #[allow(unused)]
+    use iced::{button, container, Background, Color};
 
     pub struct Pane {
         pub is_nav_pane: bool,
