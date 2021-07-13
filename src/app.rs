@@ -27,7 +27,7 @@ struct NavPane {
 struct SimpleButton {
     state: button::State,
     text: String,
-    on_pressed: Message<i32>,
+    on_pressed: Message,
 }
 
 struct Pane {
@@ -43,13 +43,13 @@ struct Content {
     nav_pane: NavPane,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum Message<T> {
+#[derive(Debug, Clone)]
+pub enum Message {
     Split(pane_grid::Axis, pane_grid::Pane),
     Close(pane_grid::Pane),
     RefreshClicked,
     NewRecipeClicked,
-    RecipeFetched(T),
+    RecipeFetched(Option<paprika_api::api::Recipe>),
 }
 
 struct RecipeFetcher<T> {
@@ -62,7 +62,7 @@ where
     T: 'static + Hash + Copy + Send,
     H: Hasher,
 {
-    type Output = T;
+    type Output = Option<paprika_api::api::Recipe>;
 
     fn hash(&self, state: &mut H) {
         struct Marker;
@@ -81,7 +81,7 @@ where
             self.paprika.clone(),
             move |paprika| async move {
                 let uid;
-                let mut fetched = false;
+                let mut recipe = None;
                 {
                     {
                         let mut _paprika = paprika.lock().unwrap();
@@ -95,11 +95,6 @@ where
                         }
                     }
 
-                    // the render thread uses the same mutex, so this is to
-                    // prevent that thread from being blocked too long
-                    // TODO: After fetching, copy to a vec on HomePage to prevent
-                    // need to block during the fetch
-                    thread::sleep(time::Duration::from_millis(15));
                     {
                         let mut _paprika = paprika.lock().unwrap();
 
@@ -111,34 +106,28 @@ where
                                 .to_owned();
                             _paprika.last_fetched += 1;
 
-                            tokio::runtime::Builder::new_current_thread()
+                            recipe = Some(tokio::runtime::Builder::new_current_thread()
                                 .enable_all()
                                 .build()
                                 .unwrap()
-                                .block_on(_paprika.fetch_recipe_by_id(&uid));
-                            fetched = true;
+                                .block_on(_paprika.get_recipe_by_id(&uid)));
+                        }
+                        else {
+                            thread::sleep(time::Duration::from_millis(5000));
                         }
                     }
                 }
-                if fetched {
-                    // the render thread uses the same mutex, so this is to
-                    // prevent that thread from being blocked too long
-                    thread::sleep(time::Duration::from_millis(15));
-                    Some((_id, paprika))
-                } else {
-                    // TODO: figure out why returning None ends the subscription
-                    Some((_id, paprika))
-                }
+                Some((recipe, paprika))
             },
         ))
     }
 }
 impl Application for HomePage {
-    type Message = Message<i32>;
+    type Message = Message;
     type Executor = executor::Default;
     type Flags = ();
 
-    fn new(_flags: ()) -> (Self, Command<Message<i32>>) {
+    fn new(_flags: ()) -> (Self, Command<Message>) {
         let paprika = paprika::Paprika::new();
         let mutex = std::sync::Mutex::new(paprika);
         let arc = std::sync::Arc::new(mutex);
@@ -165,9 +154,9 @@ impl Application for HomePage {
 
     fn update(
         &mut self,
-        message: Message<i32>,
+        message: Message,
         _clipboard: &mut Clipboard,
-    ) -> Command<Message<i32>> {
+    ) -> Command<Message> {
         match message {
             Message::Split(axis, pane) => {
                 let _result = self.panes.split(axis, &pane, Pane::new(false));
@@ -188,23 +177,27 @@ impl Application for HomePage {
             Message::NewRecipeClicked => {
                 println!("New recipe!")
             }
-            Message::RecipeFetched(_id) => {
-                let total;
+            Message::RecipeFetched(recipe) => {
+                //let total;
                 {
-                    let paprika = self.paprika.lock().unwrap();
-                    total = paprika.recipe_entries.len();
-                    self.recipes.lock().unwrap().clone_from(&paprika.recipes);
+                    //let paprika = self.paprika.lock().unwrap();
+                    //total = paprika.recipe_entries.len();
+                    //self.recipes.lock().unwrap().clone_from(&paprika.recipes);
+                    match recipe {
+                        Some(recipe) => self.recipes.lock().unwrap().push(recipe),
+                        None => {}
+                    }
                 }
                 {
                     let count = self.recipes.lock().unwrap().len();
-                    println!("Fetched recipe {}/{}", count, total);
+                    println!("Fetched recipe {}", count);
                 }
             }
         }
         Command::none()
     }
 
-    fn view(&mut self) -> Element<Message<i32>> {
+    fn view(&mut self) -> Element<Message> {
         let pane_grid = PaneGrid::new(&mut self.panes, |id, pane| {
             pane_grid::Content::new(pane.content.view(id, 2, pane.is_nav_pane)).style(style::Pane {
                 is_nav_pane: pane.is_nav_pane,
@@ -217,18 +210,18 @@ impl Application for HomePage {
         String::from("Ancho Recipe Manager")
     }
 
-    fn subscription(&self) -> Subscription<Message<i32>> {
+    fn subscription(&self) -> Subscription<Message> {
         let paprika = self.paprika.clone();
         let test = iced::Subscription::from_recipe(RecipeFetcher {
             paprika: paprika,
             id: 0,
         });
-        test.map(|id| Message::RecipeFetched(id))
+        test.map(|recipe| Message::RecipeFetched(recipe))
     }
 }
 
 impl SimpleButton {
-    fn new(text: String, on_pressed: Message<i32>) -> Self {
+    fn new(text: String, on_pressed: Message) -> Self {
         Self {
             state: button::State::new(),
             text: text.into(),
@@ -236,9 +229,9 @@ impl SimpleButton {
         }
     }
 
-    fn to_button(&mut self) -> button::Button<Message<i32>> {
+    fn to_button(&mut self) -> button::Button<Message> {
         Button::new(&mut self.state, Text::new(&self.text))
-            .on_press(self.on_pressed)
+            .on_press(self.on_pressed.clone())
             .into()
     }
 }
@@ -254,7 +247,7 @@ impl NavPane {
         }
     }
 
-    fn view(&mut self) -> Element<Message<i32>> {
+    fn view(&mut self) -> Element<Message> {
         let mut column = Column::new();
 
         column = column.push(self.refresh.to_button());
@@ -288,7 +281,7 @@ impl Content {
         pane: pane_grid::Pane,
         total_panes: usize,
         is_nav_bar: bool,
-    ) -> Element<Message<i32>> {
+    ) -> Element<Message> {
         let Content {
             scroll,
             split_horizontally,

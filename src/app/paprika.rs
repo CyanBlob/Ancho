@@ -46,14 +46,14 @@ impl Paprika {
             println!("{:?}", recipe);
         }
     }
-    
+
     pub async fn fetch_recipe_list(&mut self) {
         if self.token.is_empty() {
             self.login().await.expect("Couldn't log in");
         }
         self.recipe_entries = paprika_api::api::get_recipes(&self.token).await.unwrap();
     }
-    
+
     #[allow(unused)]
     pub async fn get_recipe_by_id(&mut self, id: &str) -> paprika_api::api::Recipe {
         if self.token.is_empty() {
@@ -62,7 +62,10 @@ impl Paprika {
         if self.recipe_entries.len() == 0 {
             self.fetch_recipe_list().await;
         }
-        paprika_api::api::get_recipe_by_id(&self.token, id).await.unwrap()
+        let recipe = paprika_api::api::get_recipe_by_id(&self.token, id).await.unwrap();
+        // TODO: stop doing this
+        self.recipes.push(recipe.clone());
+        recipe
     }
 
     pub async fn fetch_recipe_by_id(&mut self, id: &str) {
