@@ -68,6 +68,7 @@ impl Paprika {
         recipe
     }
 
+    #[allow(unused)]
     pub async fn fetch_recipe_by_id(&mut self, id: &str) {
         if self.token.is_empty() {
             self.login().await.expect("Couldn't log in");
