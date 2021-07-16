@@ -1,8 +1,15 @@
 mod paprika;
+mod style;
+mod recipe_fetcher;
+mod message;
+mod nav_pane;
+mod simple_button;
 
-use std::hash::{Hash, Hasher};
+use simple_button::SimpleButton;
+use nav_pane::NavPane;
+use message::Message;
+use recipe_fetcher::RecipeFetcher;
 use std::sync::{Arc, Mutex};
-use std::{thread, time};
 
 use iced::{
     button, executor,
@@ -11,23 +18,10 @@ use iced::{
     HorizontalAlignment, Length, PaneGrid, Scrollable, Subscription, Text,
 };
 
-use iced_futures::futures;
-
 pub struct HomePage {
     panes: pane_grid::State<Pane>,
     paprika: Arc<Mutex<paprika::Paprika>>,
     recipes: Arc<Mutex<Vec<paprika_api::api::Recipe>>>,
-}
-
-struct NavPane {
-    refresh: SimpleButton,
-    new: SimpleButton,
-}
-
-struct SimpleButton {
-    state: button::State,
-    text: String,
-    on_pressed: Message,
 }
 
 struct Pane {
@@ -43,85 +37,7 @@ struct Content {
     nav_pane: NavPane,
 }
 
-#[derive(Debug, Clone)]
-pub enum Message {
-    Split(pane_grid::Axis, pane_grid::Pane),
-    Close(pane_grid::Pane),
-    RefreshClicked,
-    NewRecipeClicked,
-    RecipeFetched(Option<paprika_api::api::Recipe>),
-}
 
-struct RecipeFetcher<T> {
-    id: T,
-    paprika: Arc<Mutex<paprika::Paprika>>,
-}
-
-impl<H, I, T> iced_native::subscription::Recipe<H, I> for RecipeFetcher<T>
-where
-    T: 'static + Hash + Copy + Send,
-    H: Hasher,
-{
-    type Output = Option<paprika_api::api::Recipe>;
-
-    fn hash(&self, state: &mut H) {
-        struct Marker;
-        std::any::TypeId::of::<Marker>().hash(state);
-
-        self.id.hash(state);
-    }
-
-    fn stream(
-        self: Box<Self>,
-        _input: futures::stream::BoxStream<I>,
-    ) -> futures::stream::BoxStream<Self::Output> {
-        let _id = self.id;
-
-        Box::pin(futures::stream::unfold(
-            self.paprika.clone(),
-            move |paprika| async move {
-                let uid;
-                let mut recipe = None;
-                {
-                    {
-                        let mut _paprika = paprika.lock().unwrap();
-
-                        if _paprika.recipe_entries.len() == 0 {
-                            tokio::runtime::Builder::new_current_thread()
-                                .enable_all()
-                                .build()
-                                .unwrap()
-                                .block_on(_paprika.fetch_recipe_list());
-                        }
-                    }
-
-                    {
-                        let mut _paprika = paprika.lock().unwrap();
-
-                        if _paprika.recipe_entries.len() != 0
-                            && _paprika.recipes.len() != _paprika.recipe_entries.len()
-                        {
-                            uid = _paprika.recipe_entries[_paprika.last_fetched]
-                                .uid
-                                .to_owned();
-                            _paprika.last_fetched += 1;
-
-                            recipe = Some(tokio::runtime::Builder::new_current_thread()
-                                .enable_all()
-                                .build()
-                                .unwrap()
-                                .block_on(_paprika.get_recipe_by_id(&uid)));
-                        }
-                        else {
-                            thread::sleep(time::Duration::from_millis(5000));
-                        }
-                    }
-                }
-                Some((recipe, paprika))
-            },
-        ))
-    }
-}
 impl Application for HomePage {
     type Message = Message;
     type Executor = executor::Default;
@@ -178,11 +94,7 @@ impl Application for HomePage {
                 println!("New recipe!")
             }
             Message::RecipeFetched(recipe) => {
-                //let total;
                 {
-                    //let paprika = self.paprika.lock().unwrap();
-                    //total = paprika.recipe_entries.len();
-                    //self.recipes.lock().unwrap().clone_from(&paprika.recipes);
                     match recipe {
                         Some(recipe) => self.recipes.lock().unwrap().push(recipe),
                         None => {}
@@ -217,43 +129,6 @@ impl Application for HomePage {
             id: 0,
         });
         test.map(|recipe| Message::RecipeFetched(recipe))
-    }
-}
-
-impl SimpleButton {
-    fn new(text: String, on_pressed: Message) -> Self {
-        Self {
-            state: button::State::new(),
-            text: text.into(),
-            on_pressed: on_pressed,
-        }
-    }
-
-    fn to_button(&mut self) -> button::Button<Message> {
-        Button::new(&mut self.state, Text::new(&self.text))
-            .on_press(self.on_pressed.clone())
-            .into()
-    }
-}
-
-impl NavPane {
-    fn new() -> Self {
-        let refresh_simple = SimpleButton::new("Refresh recipes".into(), Message::RefreshClicked);
-        let new_simple = SimpleButton::new("New recipes".into(), Message::NewRecipeClicked);
-
-        Self {
-            refresh: refresh_simple,
-            new: new_simple,
-        }
-    }
-
-    fn view(&mut self) -> Element<Message> {
-        let mut column = Column::new();
-
-        column = column.push(self.refresh.to_button());
-        column = column.push(self.new.to_button());
-
-        column.into()
     }
 }
 
@@ -336,31 +211,6 @@ impl Content {
                     .padding(5)
                     .center_y()
                     .into()
-            }
-        }
-    }
-}
-
-mod style {
-    #[allow(unused)]
-    use iced::{button, container, Background, Color};
-
-    pub struct Pane {
-        pub is_nav_pane: bool,
-    }
-
-    impl container::StyleSheet for Pane {
-        fn style(&self) -> container::Style {
-            container::Style {
-                background: Some(Background::Color(Color::new(0.1, 0.1, 0.1, 0.1))),
-                border_width: 2.0,
-                border_color: if self.is_nav_pane {
-                    //Color::BLACK
-                    Color::from_rgb(0.7, 0.7, 0.7)
-                } else {
-                    Color::from_rgb(0.7, 0.7, 0.7)
-                },
-                ..Default::default()
             }
         }
     }

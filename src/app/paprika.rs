@@ -63,8 +63,6 @@ impl Paprika {
             self.fetch_recipe_list().await;
         }
         let recipe = paprika_api::api::get_recipe_by_id(&self.token, id).await.unwrap();
-        // TODO: stop doing this
-        self.recipes.push(recipe.clone());
         recipe
     }
 
