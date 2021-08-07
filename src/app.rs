@@ -1,14 +1,14 @@
-mod paprika;
-mod style;
-mod recipe_fetcher;
 mod message;
 mod nav_pane;
+mod paprika;
+mod recipe_fetcher;
 mod simple_button;
+mod style;
 
-use simple_button::SimpleButton;
-use nav_pane::NavPane;
 use message::Message;
+use nav_pane::NavPane;
 use recipe_fetcher::RecipeFetcher;
+use simple_button::SimpleButton;
 use std::sync::{Arc, Mutex};
 
 use iced::{
@@ -35,8 +35,8 @@ struct Content {
     split_vertically: button::State,
     close: button::State,
     nav_pane: NavPane,
+    recipes: Arc<Mutex<Vec<paprika_api::api::Recipe>>>,
 }
-
 
 impl Application for HomePage {
     type Message = Message;
@@ -48,10 +48,13 @@ impl Application for HomePage {
         let mutex = std::sync::Mutex::new(paprika);
         let arc = std::sync::Arc::new(mutex);
 
+        let recipes =
+            std::sync::Arc::new(std::sync::Mutex::new(Vec::<paprika_api::api::Recipe>::new()));
+
         // create the State<Pane>, then split it
-        let (mut panes, pane) = pane_grid::State::new(Pane::new(true));
+        let (mut panes, pane) = pane_grid::State::new(Pane::new(true, recipes.clone()));
         let (_split_panes, _split) = panes
-            .split(Axis::Vertical, &pane, Pane::new(false))
+            .split(Axis::Vertical, &pane, Pane::new(false, recipes.clone()))
             .expect("Failed to split panes");
 
         panes.resize(&_split, 0.15);
@@ -60,22 +63,18 @@ impl Application for HomePage {
             HomePage {
                 panes: panes,
                 paprika: arc.clone(),
-                recipes: std::sync::Arc::new(std::sync::Mutex::new(
-                    Vec::<paprika_api::api::Recipe>::new(),
-                )),
+                recipes: recipes.clone(),
             },
             Command::none(),
         )
     }
 
-    fn update(
-        &mut self,
-        message: Message,
-        _clipboard: &mut Clipboard,
-    ) -> Command<Message> {
+    fn update(&mut self, message: Message, _clipboard: &mut Clipboard) -> Command<Message> {
         match message {
             Message::Split(axis, pane) => {
-                let _result = self.panes.split(axis, &pane, Pane::new(false));
+                let _result = self
+                    .panes
+                    .split(axis, &pane, Pane::new(false, self.recipes.clone()));
             }
             Message::Close(_) => todo!(),
             Message::RefreshClicked => {
@@ -92,6 +91,9 @@ impl Application for HomePage {
             }
             Message::NewRecipeClicked => {
                 println!("New recipe!")
+            }
+            Message::RecipeClicked(recipe) => {
+                println!("Recipe clicked: {:?}", recipe);
             }
             Message::RecipeFetched(recipe) => {
                 {
@@ -133,22 +135,23 @@ impl Application for HomePage {
 }
 
 impl Pane {
-    fn new(is_nav_pane: bool) -> Self {
+    fn new(is_nav_pane: bool, recipes: Arc<Mutex<Vec<paprika_api::api::Recipe>>>) -> Self {
         Self {
-            content: Content::new(),
+            content: Content::new(recipes),
             is_nav_pane: is_nav_pane,
         }
     }
 }
 
 impl Content {
-    fn new() -> Self {
+    fn new(recipes: Arc<Mutex<Vec<paprika_api::api::Recipe>>>) -> Self {
         Content {
             scroll: scrollable::State::new(),
             split_horizontally: button::State::new(),
             split_vertically: button::State::new(),
             close: button::State::new(),
             nav_pane: NavPane::new(),
+            recipes: recipes.clone(),
         }
     }
     fn view(
@@ -199,11 +202,17 @@ impl Content {
                     controls = controls.push(button(close, "Close", Message::Close(pane)));
                 }
 
-                let content = Scrollable::new(scroll)
+                let mut content = Scrollable::new(scroll)
                     .width(Length::Fill)
                     .spacing(10)
                     .align_items(Align::Center)
                     .push(controls);
+
+                let _recipes = self.recipes.lock().unwrap();
+
+                for recipe in _recipes.iter() {
+                    content = content.push(Text::new(&recipe.name));
+                }
 
                 Container::new(content)
                     .width(Length::Fill)
