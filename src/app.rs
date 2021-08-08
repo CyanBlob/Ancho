@@ -4,11 +4,13 @@ mod paprika;
 mod recipe_fetcher;
 mod simple_button;
 mod style;
+mod recipe_button;
 
 use message::Message;
 use nav_pane::NavPane;
 use recipe_fetcher::RecipeFetcher;
 use simple_button::SimpleButton;
+use recipe_button::RecipeButton;
 use std::sync::{Arc, Mutex};
 
 use iced::{
@@ -36,6 +38,7 @@ struct Content {
     close: button::State,
     nav_pane: NavPane,
     recipes: Arc<Mutex<Vec<paprika_api::api::Recipe>>>,
+    recipe_buttons: Vec<RecipeButton>
 }
 
 impl Application for HomePage {
@@ -152,6 +155,7 @@ impl Content {
             close: button::State::new(),
             nav_pane: NavPane::new(),
             recipes: recipes.clone(),
+            recipe_buttons: Vec::new()
         }
     }
     fn view(
@@ -208,10 +212,24 @@ impl Content {
                     .align_items(Align::Center)
                     .push(controls);
 
-                let _recipes = self.recipes.lock().unwrap();
+                //let _recipes = self.recipes.lock().unwrap();
+                let _recipes_arc = self.recipes.clone();
+                let _recipes = _recipes_arc.lock().unwrap();
 
+                self.recipe_buttons.clear();
                 for recipe in _recipes.iter() {
-                    content = content.push(Text::new(&recipe.name));
+                    if !recipe.in_trash {
+                        let recipe_button;
+                        match recipe.image_url.clone() {
+                            Some(url) => recipe_button = recipe_button::RecipeButton::new(recipe.name.clone(), url.clone()),
+                            None => recipe_button = recipe_button::RecipeButton::new(recipe.name.clone(), "".into())
+                        }
+                        // store the button in Content's owned Vec to allow it to live long enough
+                        self.recipe_buttons.push(recipe_button);
+                    }
+                }
+                for recipe_button in &self.recipe_buttons {
+                    content = content.push(recipe_button.view());
                 }
 
                 Container::new(content)
