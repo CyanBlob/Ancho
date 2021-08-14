@@ -3,3 +3,5 @@ Cargo.lock
 .vscode
 ~
 tags
+recipe_cache
+recipe_cache/*

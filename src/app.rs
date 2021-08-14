@@ -1,16 +1,16 @@
 mod message;
 mod nav_pane;
 mod paprika;
+mod recipe_button;
 mod recipe_fetcher;
 mod simple_button;
 mod style;
-mod recipe_button;
 
 use message::Message;
 use nav_pane::NavPane;
+use recipe_button::RecipeButton;
 use recipe_fetcher::RecipeFetcher;
 use simple_button::SimpleButton;
-use recipe_button::RecipeButton;
 use std::sync::{Arc, Mutex};
 
 use iced::{
@@ -38,7 +38,7 @@ struct Content {
     close: button::State,
     nav_pane: NavPane,
     recipes: Arc<Mutex<Vec<paprika_api::api::Recipe>>>,
-    recipe_buttons: Vec<RecipeButton>
+    recipe_buttons: Vec<RecipeButton>,
 }
 
 impl Application for HomePage {
@@ -155,7 +155,7 @@ impl Content {
             close: button::State::new(),
             nav_pane: NavPane::new(),
             recipes: recipes.clone(),
-            recipe_buttons: Vec::new()
+            recipe_buttons: Vec::new(),
         }
     }
     fn view(
@@ -221,8 +221,16 @@ impl Content {
                     if !recipe.in_trash {
                         let recipe_button;
                         match recipe.image_url.clone() {
-                            Some(url) => recipe_button = recipe_button::RecipeButton::new(recipe.name.clone(), url.clone()),
-                            None => recipe_button = recipe_button::RecipeButton::new(recipe.name.clone(), "".into())
+                            Some(url) => {
+                                recipe_button = recipe_button::RecipeButton::new(
+                                    recipe.name.clone(),
+                                    url.clone(),
+                                )
+                            }
+                            None => {
+                                recipe_button =
+                                    recipe_button::RecipeButton::new(recipe.name.clone(), "".into())
+                            }
                         }
                         // store the button in Content's owned Vec to allow it to live long enough
                         self.recipe_buttons.push(recipe_button);
