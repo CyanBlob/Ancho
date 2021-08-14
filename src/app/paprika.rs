@@ -5,7 +5,7 @@ pub struct Paprika {
     token: String,
     pub recipe_entries: Vec<api::RecipeEntry>,
     pub recipes: Vec<api::Recipe>,
-    pub last_fetched: usize
+    pub last_fetched: usize,
 }
 
 impl Paprika {
@@ -14,7 +14,7 @@ impl Paprika {
             token: "".into(),
             recipe_entries: Vec::new(),
             recipes: Vec::new(),
-            last_fetched: 0
+            last_fetched: 0,
         }
     }
 
@@ -62,7 +62,9 @@ impl Paprika {
         if self.recipe_entries.len() == 0 {
             self.fetch_recipe_list().await;
         }
-        let recipe = paprika_api::api::get_recipe_by_id(&self.token, id).await.unwrap();
+        let recipe = paprika_api::api::get_recipe_by_id(&self.token, id)
+            .await
+            .unwrap();
         recipe
     }
 
@@ -74,7 +76,11 @@ impl Paprika {
         if self.recipe_entries.len() == 0 {
             self.fetch_recipe_list().await;
         }
-        self.recipes.push(paprika_api::api::get_recipe_by_id(&self.token, id).await.unwrap());
+        self.recipes.push(
+            paprika_api::api::get_recipe_by_id(&self.token, id)
+                .await
+                .unwrap(),
+        );
     }
 
     pub async fn fetch_recipes(&mut self) {

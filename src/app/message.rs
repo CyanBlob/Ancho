@@ -1,6 +1,4 @@
-use iced::{
-    pane_grid::{self}
-};
+use iced::pane_grid::{self};
 
 #[derive(Debug, Clone)]
 #[allow(unused)]
@@ -10,5 +8,5 @@ pub enum Message {
     RefreshClicked,
     NewRecipeClicked,
     RecipeFetched(Option<paprika_api::api::Recipe>),
-    RecipeClicked(paprika_api::api::Recipe)
+    RecipeClicked(paprika_api::api::Recipe),
 }

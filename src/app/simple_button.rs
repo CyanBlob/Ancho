@@ -1,8 +1,6 @@
 use crate::app::Message;
 
-use iced::{
-    button, Button, Text
-};
+use iced::{button, Button, Text};
 
 pub struct SimpleButton {
     pub state: button::State,

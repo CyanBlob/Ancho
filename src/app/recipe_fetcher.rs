@@ -1,6 +1,5 @@
 use crate::app::paprika;
 
-use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
 use std::{fs, path, thread, time};
@@ -55,10 +54,6 @@ fn save_recipe_to_cache(recipe: Option<&Recipe>) -> Result<(), std::io::Error> {
 
     fs::write(path, serialized);
 
-    /*let mut file = match fs::File::open(&path) {
-        Err(e) => panic!("Couldn't open file: {} {}", &file_path, e),
-        Ok(file) => fs::write(path, serialized),
-    };*/
     Ok(())
 }
 

@@ -33,7 +33,6 @@ impl RecipeInterior {
 
 impl RecipeView {
     pub fn new(recipe: paprika_api::api::Recipe) -> Self {
-
         let name = recipe.name.clone();
         Self {
             recipe: recipe,

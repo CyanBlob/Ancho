@@ -1,9 +1,7 @@
-use crate::app::SimpleButton;
 use crate::app::Message;
+use crate::app::SimpleButton;
 
-use iced::{
-    Column, Element,
-};
+use iced::{Column, Element};
 
 pub struct NavPane {
     pub refresh: SimpleButton,
