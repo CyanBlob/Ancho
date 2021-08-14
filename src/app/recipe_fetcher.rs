@@ -25,7 +25,10 @@ fn get_recipe_from_cache(uid: &str, hash: &str) -> Option<Recipe> {
     let path = path::Path::new(&file_path);
 
     match fs::read_to_string(&path) {
-        Err(e) => return None,
+        Err(_) => {
+            println!("Failed to load recipe from cache :(");
+            return None;
+        }
         Ok(recipe_string) => {
             let recipe: Recipe = serde_json::from_str(&recipe_string).unwrap();
 
@@ -33,7 +36,8 @@ fn get_recipe_from_cache(uid: &str, hash: &str) -> Option<Recipe> {
                 println!("Got recipe from cache!");
                 return Some(recipe);
             } else {
-                println!("Failed to load recipe from cache :(");
+                println!("Recipe changed; cache invalidated");
+                fs::remove_file(&path).unwrap();
                 return None;
             }
         }
@@ -111,6 +115,7 @@ where
                                 .to_owned();
                             _paprika.last_fetched += 1;
 
+                            println!("Fetching recipe: {}", _paprika.last_fetched);
                             match get_recipe_from_cache(&uid, &hash) {
                                 Some(cached_recipe) => recipe = Some(cached_recipe),
                                 None => {
@@ -129,8 +134,11 @@ where
                                 }
                             }
                         } else {
-                            // delay polling after all known recipes have been fetched
+                            // check for updated recipes every minute after fetching them all
                             thread::sleep(time::Duration::from_millis(60000));
+                            println!("Re-fetching recipes!");
+                            _paprika.last_fetched = 0;
+                            _paprika.recipe_entries.clear();
                         }
                     }
                 }

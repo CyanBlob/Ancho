@@ -101,13 +101,16 @@ impl Application for HomePage {
             Message::RecipeFetched(recipe) => {
                 {
                     match recipe {
-                        Some(recipe) => self.recipes.lock().unwrap().push(recipe),
+                        Some(recipe) => {
+                            let mut recipes = self.recipes.lock().unwrap();
+                            let found_recipe = recipes.iter_mut().find(|_recipe| _recipe.uid == recipe.uid);
+                            match found_recipe {
+                                Some(_recipe) => *_recipe = recipe,
+                                None => recipes.push(recipe)
+                            }
+                        },
                         None => {}
                     }
-                }
-                {
-                    let count = self.recipes.lock().unwrap().len();
-                    println!("Fetched recipe {}", count);
                 }
             }
         }
