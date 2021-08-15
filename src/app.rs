@@ -20,6 +20,8 @@ use iced::{
     HorizontalAlignment, Length, PaneGrid, Scrollable, Subscription, Text,
 };
 
+use edit;
+
 pub struct HomePage {
     panes: pane_grid::State<Pane>,
     paprika: Arc<Mutex<paprika::Paprika>>,
@@ -33,9 +35,6 @@ struct Pane {
 
 struct Content {
     scroll: scrollable::State,
-    split_horizontally: button::State,
-    split_vertically: button::State,
-    close: button::State,
     nav_pane: NavPane,
     recipes: Arc<Mutex<Vec<paprika_api::api::Recipe>>>,
     recipe_buttons: Vec<RecipeButton>,
@@ -95,24 +94,40 @@ impl Application for HomePage {
             Message::NewRecipeClicked => {
                 println!("New recipe!")
             }
-            Message::RecipeClicked(recipe) => {
-                println!("Recipe clicked: {:?}", recipe);
-            }
-            Message::RecipeFetched(recipe) => {
+            Message::RecipeClicked(recipe_uid) => {
+                println!("Recipe clicked: {:?}", recipe_uid);
+                let mut recipes = self.recipes.lock().unwrap();
+
+                let found_recipe = recipes.iter_mut().find(|_recipe| _recipe.uid == recipe_uid);
+                let serialized = serde_json::to_string_pretty(found_recipe.unwrap()).unwrap();
+
+                let edited = edit::edit(serialized).unwrap();
+
+                let mut edited_recipe: paprika_api::api::Recipe =
+                    serde_json::from_str(&edited).unwrap();
+
                 {
-                    match recipe {
-                        Some(recipe) => {
-                            let mut recipes = self.recipes.lock().unwrap();
-                            let found_recipe = recipes.iter_mut().find(|_recipe| _recipe.uid == recipe.uid);
-                            match found_recipe {
-                                Some(_recipe) => *_recipe = recipe,
-                                None => recipes.push(recipe)
-                            }
-                        },
-                        None => {}
-                    }
+                    let _paprika = self.paprika.clone();
+                    std::thread::spawn(move || {
+                        tokio::runtime::Builder::new_current_thread()
+                            .enable_all()
+                            .build()
+                            .unwrap()
+                            .block_on(_paprika.lock().unwrap().update_recipe(&mut edited_recipe));
+                    });
                 }
             }
+            Message::RecipeFetched(recipe) => match recipe {
+                Some(recipe) => {
+                    let mut recipes = self.recipes.lock().unwrap();
+                    let found_recipe = recipes.iter_mut().find(|_recipe| _recipe.uid == recipe.uid);
+                    match found_recipe {
+                        Some(_recipe) => *_recipe = recipe,
+                        None => recipes.push(recipe),
+                    }
+                }
+                None => {}
+            },
         }
         Command::none()
     }
@@ -153,9 +168,6 @@ impl Content {
     fn new(recipes: Arc<Mutex<Vec<paprika_api::api::Recipe>>>) -> Self {
         Content {
             scroll: scrollable::State::new(),
-            split_horizontally: button::State::new(),
-            split_vertically: button::State::new(),
-            close: button::State::new(),
             nav_pane: NavPane::new(),
             recipes: recipes.clone(),
             recipe_buttons: Vec::new(),
@@ -163,51 +175,21 @@ impl Content {
     }
     fn view(
         &mut self,
+        #[allow(unused)]
         pane: pane_grid::Pane,
+        #[allow(unused)]
         total_panes: usize,
         is_nav_bar: bool,
     ) -> Element<Message> {
         let Content {
             scroll,
-            split_horizontally,
-            split_vertically,
-            close,
             ..
         } = self;
 
         match is_nav_bar {
             true => self.nav_pane.view(),
             false => {
-                let button = |state, label, message| {
-                    Button::new(
-                        state,
-                        Text::new(label)
-                            .width(Length::Fill)
-                            .horizontal_alignment(HorizontalAlignment::Center)
-                            .size(16),
-                    )
-                    .width(Length::Fill)
-                    .padding(8)
-                    .on_press(message)
-                };
-
-                let mut controls = Column::new()
-                    .spacing(5)
-                    .max_width(150)
-                    .push(button(
-                        split_horizontally,
-                        "Split horizontally",
-                        Message::Split(pane_grid::Axis::Horizontal, pane),
-                    ))
-                    .push(button(
-                        split_vertically,
-                        "Split vertically",
-                        Message::Split(pane_grid::Axis::Vertical, pane),
-                    ));
-
-                if total_panes > 1 {
-                    controls = controls.push(button(close, "Close", Message::Close(pane)));
-                }
+                let controls = Column::new().spacing(5).max_width(150);
 
                 let mut content = Scrollable::new(scroll)
                     .width(Length::Fill)
@@ -215,7 +197,6 @@ impl Content {
                     .align_items(Align::Center)
                     .push(controls);
 
-                //let _recipes = self.recipes.lock().unwrap();
                 let _recipes_arc = self.recipes.clone();
                 let _recipes = _recipes_arc.lock().unwrap();
 
@@ -227,19 +208,23 @@ impl Content {
                             Some(url) => {
                                 recipe_button = recipe_button::RecipeButton::new(
                                     recipe.name.clone(),
+                                    recipe.uid.clone(),
                                     url.clone(),
                                 )
                             }
                             None => {
-                                recipe_button =
-                                    recipe_button::RecipeButton::new(recipe.name.clone(), "".into())
+                                recipe_button = recipe_button::RecipeButton::new(
+                                    recipe.name.clone(),
+                                    recipe.uid.clone(),
+                                    "".into(),
+                                )
                             }
                         }
                         // store the button in Content's owned Vec to allow it to live long enough
                         self.recipe_buttons.push(recipe_button);
                     }
                 }
-                for recipe_button in &self.recipe_buttons {
+                for recipe_button in &mut self.recipe_buttons {
                     content = content.push(recipe_button.view());
                 }
 

@@ -1,4 +1,5 @@
 use paprika_api::api;
+use std::env;
 
 pub struct Paprika {
     token: String,
@@ -18,9 +19,9 @@ impl Paprika {
     }
 
     pub async fn login(&mut self) -> Result<String, Box<dyn std::error::Error>> {
-        //if let Ok(email) = env::var("PAPRIKA_EMAIL") {
-            //if let Ok(password) = env::var("PAPRIKA_PASSWORD") {
-                let res = paprika_api::api::login("andrewjamest1993@gmail.com".into(), "***REMOVED***".into()).await;
+        if let Ok(email) = env::var("PAPRIKA_EMAIL") {
+            if let Ok(password) = env::var("PAPRIKA_PASSWORD") {
+                let res = paprika_api::api::login(&email, &password).await;
                 match res {
                     Ok(t) => {
                         println!("Yay! Token: {}", t.token);
@@ -29,12 +30,12 @@ impl Paprika {
                     }
                     Err(e) => Err(e.into()),
                 }
-            /* } else {
+             } else {
                 Err("No password found; is the PAPRIKA_PASSWORD environment variable set?".into())
             }
         } else {
             Err("No email found; is the PAPRIKA_EMAIL environment variable set?".into())
-        }*/
+        }
     }
 
     // print all recipes (can be a lot of requests)
