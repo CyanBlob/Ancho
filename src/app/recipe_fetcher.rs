@@ -102,11 +102,17 @@ where
                     }
 
                     {
-                        let mut _paprika = paprika.lock().unwrap();
-
-                        if _paprika.recipe_entries.len() != 0
-                            && _paprika.last_fetched != _paprika.recipe_entries.len()
+                        let recipe_count;
+                        let last_fetched;
                         {
+                            let mut _paprika = paprika.lock().unwrap();
+                            recipe_count = _paprika.recipe_entries.len();
+                            last_fetched = _paprika.last_fetched;
+                        }
+
+                        if recipe_count != 0 && last_fetched != recipe_count {
+                            let mut _paprika = paprika.lock().unwrap();
+
                             uid = _paprika.recipe_entries[_paprika.last_fetched]
                                 .uid
                                 .to_owned();
@@ -135,10 +141,13 @@ where
                             }
                         } else {
                             // check for updated recipes every minute after fetching them all
-                            thread::sleep(time::Duration::from_millis(60000));
+                            thread::sleep(time::Duration::from_millis(5000));
                             println!("Re-fetching recipes!");
-                            _paprika.last_fetched = 0;
-                            _paprika.recipe_entries.clear();
+                            {
+                                let mut _paprika = paprika.lock().unwrap();
+                                _paprika.last_fetched = 0;
+                                _paprika.recipe_entries.clear();
+                            }
                         }
                     }
                 }

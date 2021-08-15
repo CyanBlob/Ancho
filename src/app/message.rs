@@ -8,5 +8,5 @@ pub enum Message {
     RefreshClicked,
     NewRecipeClicked,
     RecipeFetched(Option<paprika_api::api::Recipe>),
-    RecipeClicked(paprika_api::api::Recipe),
+    RecipeClicked(String),
 }

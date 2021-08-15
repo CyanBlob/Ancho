@@ -1,5 +1,4 @@
 use paprika_api::api;
-use std::env;
 
 pub struct Paprika {
     token: String,
@@ -19,9 +18,9 @@ impl Paprika {
     }
 
     pub async fn login(&mut self) -> Result<String, Box<dyn std::error::Error>> {
-        if let Ok(email) = env::var("PAPRIKA_EMAIL") {
-            if let Ok(password) = env::var("PAPRIKA_PASSWORD") {
-                let res = paprika_api::api::login(&email, &password).await;
+        //if let Ok(email) = env::var("PAPRIKA_EMAIL") {
+            //if let Ok(password) = env::var("PAPRIKA_PASSWORD") {
+                let res = paprika_api::api::login("andrewjamest1993@gmail.com".into(), "***REMOVED***".into()).await;
                 match res {
                     Ok(t) => {
                         println!("Yay! Token: {}", t.token);
@@ -30,12 +29,12 @@ impl Paprika {
                     }
                     Err(e) => Err(e.into()),
                 }
-            } else {
+            /* } else {
                 Err("No password found; is the PAPRIKA_PASSWORD environment variable set?".into())
             }
         } else {
             Err("No email found; is the PAPRIKA_EMAIL environment variable set?".into())
-        }
+        }*/
     }
 
     // print all recipes (can be a lot of requests)
@@ -107,26 +106,18 @@ impl Paprika {
     }
 
     #[allow(dead_code)]
-    pub async fn update_recipe(&mut self, id: &str) {
+    pub async fn update_recipe(&mut self, recipe: &mut paprika_api::api::Recipe) {
         if self.token.is_empty() {
             self.login().await.expect("Couldn't log in");
         }
+        
+        recipe.hash.clear();
 
-        let mut recipe = paprika_api::api::get_recipe_by_id(&self.token, &id)
+        let success = paprika_api::api::upload_recipe(&self.token, recipe)
             .await
             .unwrap();
 
-        recipe.name = String::from("Birria tacos");
-        let success = paprika_api::api::upload_recipe(&self.token, &mut recipe)
-            .await
-            .unwrap();
-
-        if success {
-            let recipe_after_edit = paprika_api::api::get_recipe_by_id(&self.token, &recipe.uid)
-                .await
-                .unwrap();
-            println!("Edited recipe: \n{:?}", recipe_after_edit);
-        } else {
+        if !success {
             println!("Failed to update recipe");
         }
     }
