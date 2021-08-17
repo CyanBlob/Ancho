@@ -24,7 +24,7 @@ impl Paprika {
     pub async fn login(&mut self) -> Result<String, Box<dyn std::error::Error>> {
         if let Ok(email) = env::var("PAPRIKA_EMAIL") {
             if let Ok(password) = env::var("PAPRIKA_PASSWORD") {
-                let res = paprika_api::api::login(&password, &password).await;
+                let res = paprika_api::api::login(&email, &password).await;
                 match res {
                     Ok(t) => {
                         println!("Yay! Token: {}", t.token);
