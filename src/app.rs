@@ -1,3 +1,4 @@
+mod account;
 mod message;
 mod nav_pane;
 mod paprika;
@@ -6,21 +7,21 @@ mod recipe_fetcher;
 mod simple_button;
 mod style;
 
+use chrono::Utc;
 use message::Message;
 use nav_pane::NavPane;
 use recipe_button::RecipeButton;
 use recipe_fetcher::RecipeFetcher;
 use simple_button::SimpleButton;
 use std::sync::{Arc, Mutex};
-use chrono::{DateTime, Utc};
 
 use edit;
 
 use iced::{
-    button, executor,
+    executor,
     pane_grid::{self, Axis},
-    scrollable, Align, Application, Button, Clipboard, Column, Command, Container, Element,
-    HorizontalAlignment, Length, PaneGrid, Scrollable, Subscription, Text,
+    scrollable, Align, Application, Clipboard, Column, Command, Container, Element, Length,
+    PaneGrid, Scrollable, Subscription,
 };
 
 pub struct HomePage {
@@ -80,22 +81,11 @@ impl Application for HomePage {
                     .split(axis, &pane, Pane::new(false, self.recipes.clone()));
             }
             Message::Close(_) => todo!(),
-            Message::RefreshClicked => {
-                let mut mutex = self.paprika.lock().unwrap();
-                {
-                    mutex.recipe_entries.clear();
-                    mutex.recipes.clear();
-                    mutex.last_fetched = 0;
-                }
-                {
-                    let mut recipes = self.recipes.lock().unwrap();
-                    recipes.clear();
-                }
-            }
+
             Message::NewRecipeClicked => {
                 println!("New recipe!");
                 let mut recipe = paprika_api::api::Recipe::default();
-                
+
                 recipe.created = Utc::now().format("%Y-%m-%d %H:%M:%S".into()).to_string();
 
                 let serialized = serde_json::to_string_pretty(&recipe).unwrap();
@@ -150,6 +140,28 @@ impl Application for HomePage {
                 }
                 None => {}
             },
+            Message::LoginClicked => {
+                let mut account = account::Account::new("".into(), "".into());
+
+                let serialized = serde_json::to_string_pretty(&account).unwrap();
+
+                let edited = edit::edit(serialized).unwrap();
+
+                account = serde_json::from_str(&edited).unwrap();
+                
+                {
+                    let mut _paprika = self.paprika.lock().unwrap();
+                    _paprika.account = account;
+                    _paprika.token = "".into();
+                    _paprika.recipe_entries.clear();
+                    _paprika.last_fetched = 0;
+                }
+                {
+                    let mut _recipes = self.recipes.lock().unwrap();
+                    _recipes.clear();
+                }
+            }
+            Message::AccountChanged(_, _) => todo!(),
         }
         Command::none()
     }
