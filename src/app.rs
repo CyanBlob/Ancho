@@ -12,6 +12,9 @@ use recipe_button::RecipeButton;
 use recipe_fetcher::RecipeFetcher;
 use simple_button::SimpleButton;
 use std::sync::{Arc, Mutex};
+use chrono::{DateTime, Utc};
+
+use edit;
 
 use iced::{
     button, executor,
@@ -19,8 +22,6 @@ use iced::{
     scrollable, Align, Application, Button, Clipboard, Column, Command, Container, Element,
     HorizontalAlignment, Length, PaneGrid, Scrollable, Subscription, Text,
 };
-
-use edit;
 
 pub struct HomePage {
     panes: pane_grid::State<Pane>,
@@ -92,7 +93,28 @@ impl Application for HomePage {
                 }
             }
             Message::NewRecipeClicked => {
-                println!("New recipe!")
+                println!("New recipe!");
+                let mut recipe = paprika_api::api::Recipe::default();
+                
+                recipe.created = Utc::now().format("%Y-%m-%d %H:%M:%S".into()).to_string();
+
+                let serialized = serde_json::to_string_pretty(&recipe).unwrap();
+
+                let edited = edit::edit(serialized).unwrap();
+
+                let mut edited_recipe: paprika_api::api::Recipe =
+                    serde_json::from_str(&edited).unwrap();
+
+                {
+                    let _paprika = self.paprika.clone();
+                    std::thread::spawn(move || {
+                        tokio::runtime::Builder::new_current_thread()
+                            .enable_all()
+                            .build()
+                            .unwrap()
+                            .block_on(_paprika.lock().unwrap().update_recipe(&mut edited_recipe));
+                    });
+                }
             }
             Message::RecipeClicked(recipe_uid) => {
                 println!("Recipe clicked: {:?}", recipe_uid);
@@ -175,16 +197,11 @@ impl Content {
     }
     fn view(
         &mut self,
-        #[allow(unused)]
-        pane: pane_grid::Pane,
-        #[allow(unused)]
-        total_panes: usize,
+        #[allow(unused)] pane: pane_grid::Pane,
+        #[allow(unused)] total_panes: usize,
         is_nav_bar: bool,
     ) -> Element<Message> {
-        let Content {
-            scroll,
-            ..
-        } = self;
+        let Content { scroll, .. } = self;
 
         match is_nav_bar {
             true => self.nav_pane.view(),
